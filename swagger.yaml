@@ -34,12 +34,9 @@ paths:
         généré.
 
         **Comportement :**
-        - Crée une company HubSpot avec `name`, `siren`, `siret`
+        - Crée une company HubSpot avec `name`, `siret`, `school_uai`, `school_address`
         - Répond de manière **synchrone** avec le `hubspot_id` créé
         - Logue l'opération dans la base Retool (table `execution_logs`)
-
-        > ⚠️ Ce workflow est actuellement **inactif** (non déployé en production).
-        > Activer le workflow dans n8n avant utilisation.
       operationId: syncEntrepriseCreate
       requestBody:
         required: true
@@ -61,6 +58,8 @@ paths:
                   full_name: "Mini-Entreprise Les Créatifs"
                   siren: "123456789"
                   siret: "12345678900012"
+                  school_uai: "0750001X"
+                  school_address: "12 rue des Écoles, 75005 Paris"
       responses:
         "200":
           description: Entreprise créée avec succès dans HubSpot
@@ -114,6 +113,16 @@ components:
           type: string
           description: Numéro SIRET (14 chiffres). Optionnel.
           example: "12345678900012"
+          nullable: true
+        school_uai:
+          type: string
+          description: Code UAI de l'école rattachée à la Mini-Entreprise. Optionnel.
+          example: "0750001X"
+          nullable: true
+        school_address:
+          type: string
+          description: Adresse de l'école. Optionnel.
+          example: "12 rue des Écoles, 75005 Paris"
           nullable: true
 
     SuccessResponse:

@@ -1,0 +1,150 @@
+openapi: 3.0.3
+info:
+  title: EPA Bienfait — API n8n pour SuperForge
+  description: |
+    Endpoints n8n exposés à destination de **SuperForge (Xano)**.
+
+    Ces webhooks permettent à SuperForge de déclencher des synchronisations
+    depuis Xano vers HubSpot via n8n.
+
+    **Base URL production :** `https://n8n.entreprendre-pour-apprendre.fr`
+
+    **Authentification :** Aucune (IP filtering recommandé côté n8n)
+  version: "1.0.0"
+  contact:
+    name: EPA Bienfait
+
+servers:
+  - url: https://n8n.entreprendre-pour-apprendre.fr
+    description: Production
+
+tags:
+  - name: Entreprises
+    description: Synchronisation des entreprises (Mini-Entreprises) de Xano vers HubSpot
+
+paths:
+  /webhook/sync-entreprise-create:
+    post:
+      tags:
+        - Entreprises
+      summary: Créer une entreprise dans HubSpot
+      description: |
+        Reçoit les données d'une entreprise créée dans Xano/SuperForge,
+        crée la company correspondante dans HubSpot, et retourne le `hubspot_id`
+        généré.
+
+        **Comportement :**
+        - Crée une company HubSpot avec `name`, `siren`, `siret`
+        - Répond de manière **synchrone** avec le `hubspot_id` créé
+        - Logue l'opération dans la base Retool (table `execution_logs`)
+
+        > ⚠️ Ce workflow est actuellement **inactif** (non déployé en production).
+        > Activer le workflow dans n8n avant utilisation.
+      operationId: syncEntrepriseCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntrepriseCreateRequest'
+            examples:
+              exemple_minimal:
+                summary: Payload minimal
+                value:
+                  xano_id: 42
+                  name: "Les Créatifs"
+              exemple_complet:
+                summary: Payload complet
+                value:
+                  xano_id: 42
+                  name: "Les Créatifs"
+                  full_name: "Mini-Entreprise Les Créatifs"
+                  siren: "123456789"
+                  siret: "12345678900012"
+      responses:
+        "200":
+          description: Entreprise créée avec succès dans HubSpot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                code: SUCCESS
+                payload:
+                  hubspot_id: "778753066192"
+                message: Ressource successfully created
+        "500":
+          description: Erreur lors de la création dans HubSpot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: ERROR
+                payload: {}
+                message: "INVALID_EMAIL_ADDRESS"
+
+components:
+  schemas:
+    EntrepriseCreateRequest:
+      type: object
+      required:
+        - xano_id
+        - name
+      properties:
+        xano_id:
+          type: integer
+          description: Identifiant de l'entreprise dans Xano
+          example: 42
+        name:
+          type: string
+          description: Nom court de l'entreprise
+          example: "Les Créatifs"
+        full_name:
+          type: string
+          description: |
+            Nom complet de l'entreprise. Si absent, `name` est utilisé.
+          example: "Mini-Entreprise Les Créatifs"
+        siren:
+          type: string
+          description: Numéro SIREN (9 chiffres). Optionnel.
+          example: "123456789"
+          nullable: true
+        siret:
+          type: string
+          description: Numéro SIRET (14 chiffres). Optionnel.
+          example: "12345678900012"
+          nullable: true
+
+    SuccessResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          enum: [SUCCESS]
+          example: SUCCESS
+        payload:
+          type: object
+          properties:
+            hubspot_id:
+              type: string
+              description: ID de la company créée dans HubSpot
+              example: "778753066192"
+        message:
+          type: string
+          example: Ressource successfully created
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          enum: [ERROR]
+          example: ERROR
+        payload:
+          type: object
+          example: {}
+        message:
+          type: string
+          description: Message d'erreur retourné par HubSpot
+          example: "INVALID_EMAIL_ADDRESS"

@@ -34,7 +34,7 @@ paths:
         généré.
 
         **Comportement :**
-        - Crée une company HubSpot avec `name`, `siret`, `school_uai`, `school_address`
+        - Crée une company HubSpot avec `name`, `siren`, `siret`, `school_uai`, `school_address`
         - Répond de manière **synchrone** avec le `hubspot_id` créé
         - Logue l'opération dans la base Retool (table `execution_logs`)
       operationId: syncEntrepriseCreate
@@ -50,6 +50,8 @@ paths:
                 value:
                   xano_id: 42
                   name: "Les Créatifs"
+                  siren: "123456789"
+                  siret: "12345678900012"
               exemple_complet:
                 summary: Payload complet
                 value:
@@ -106,14 +108,12 @@ components:
           example: "Mini-Entreprise Les Créatifs"
         siren:
           type: string
-          description: Numéro SIREN (9 chiffres). Optionnel.
+          description: Numéro SIREN (9 chiffres). Transmis à HubSpot.
           example: "123456789"
-          nullable: true
         siret:
           type: string
-          description: Numéro SIRET (14 chiffres). Optionnel.
+          description: Numéro SIRET (14 chiffres). Transmis à HubSpot.
           example: "12345678900012"
-          nullable: true
         school_uai:
           type: string
           description: Code UAI de l'école rattachée à la Mini-Entreprise. Optionnel.

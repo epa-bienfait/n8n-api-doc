@@ -87,6 +87,72 @@ paths:
                 payload: {}
                 message: "INVALID_EMAIL_ADDRESS"
 
+  /webhook/sync-company-update-from-xano:
+    post:
+      tags:
+        - Entreprises
+      summary: Mettre à jour une entreprise dans HubSpot
+      description: |
+        Reçoit les données d'une entreprise depuis Xano/SuperForge et met à jour
+        la company correspondante dans HubSpot via PATCH.
+
+        **Comportement :**
+        - Met à jour la company HubSpot identifiée par `hubspot_id`
+        - **Seuls les champs renseignés (non vides) sont patchés**
+        - Couvre à la fois les Entreprises (`name`, `siret`, `siren`, `ville`, `secteur`)
+          et les Établissements (`uai`)
+        - Mappings de champs : `ville` → `city`, `secteur` → `industry`, `uai` → propriété UAI HubSpot
+        - Répond de manière **synchrone** avec le `hubspot_id` mis à jour
+        - Logue l'opération dans la base Retool (table `execution_logs`)
+      operationId: syncCompanyUpdate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyUpdateRequest'
+            examples:
+              exemple_minimal:
+                summary: Payload minimal
+                value:
+                  hubspot_id: "778753066192"
+                  xano_id: 42
+              exemple_entreprise:
+                summary: Mise à jour d'une Mini-Entreprise
+                value:
+                  hubspot_id: "778753066192"
+                  xano_id: 42
+                  name: "Les Créatifs"
+                  siren: "123456789"
+                  siret: "12345678900012"
+                  ville: "Paris"
+                  secteur: "Commerce"
+              exemple_etablissement:
+                summary: Mise à jour d'un Établissement (UAI)
+                value:
+                  hubspot_id: "778753066193"
+                  xano_id: 7
+                  uai: "0750001X"
+      responses:
+        "200":
+          description: Entreprise mise à jour avec succès dans HubSpot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactUpdateSuccessResponse'
+              example:
+                success: true
+                hubspot_id: "778753066192"
+        "500":
+          description: Erreur lors de la mise à jour dans HubSpot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactUpdateErrorResponse'
+              example:
+                success: false
+                error: "COMPANY_NOT_FOUND"
+
   /webhook/sync-contact-update-from-xano:
     post:
       tags:
@@ -219,6 +285,48 @@ components:
           type: string
           description: Message d'erreur retourné par HubSpot
           example: "INVALID_EMAIL_ADDRESS"
+
+    CompanyUpdateRequest:
+      type: object
+      required:
+        - hubspot_id
+        - xano_id
+      properties:
+        hubspot_id:
+          type: string
+          description: ID HubSpot de la company à mettre à jour
+          example: "778753066192"
+        xano_id:
+          type: integer
+          description: Identifiant de l'entreprise dans Xano (utilisé pour les logs)
+          example: 42
+        name:
+          type: string
+          description: Nom de l'entreprise
+          example: "Les Créatifs"
+        siren:
+          type: string
+          description: Numéro SIREN (9 chiffres). Transmis à HubSpot.
+          example: "123456789"
+        siret:
+          type: string
+          description: Numéro SIRET (14 chiffres). Transmis à HubSpot.
+          example: "12345678900012"
+        ville:
+          type: string
+          description: |
+            Ville de l'entreprise. Transmis à HubSpot dans le champ `city`.
+          example: "Paris"
+        secteur:
+          type: string
+          description: |
+            Secteur d'activité. Transmis à HubSpot dans le champ `industry`.
+          example: "Commerce"
+        uai:
+          type: string
+          description: |
+            Code UAI de l'établissement scolaire. Transmis à HubSpot dans la propriété UAI dédiée.
+          example: "0750001X"
 
     ContactUpdateRequest:
       type: object

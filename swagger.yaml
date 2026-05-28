@@ -21,6 +21,8 @@ servers:
 tags:
   - name: Entreprises
     description: Synchronisation des entreprises (Mini-Entreprises) de Xano vers HubSpot
+  - name: Contacts
+    description: Synchronisation des contacts de Xano vers HubSpot
 
 paths:
   /webhook/sync-entreprise-create:
@@ -84,6 +86,66 @@ paths:
                 code: ERROR
                 payload: {}
                 message: "INVALID_EMAIL_ADDRESS"
+
+  /webhook/sync-contact-update-from-xano:
+    post:
+      tags:
+        - Contacts
+      summary: Mettre à jour un contact dans HubSpot
+      description: |
+        Reçoit les données d'un contact depuis Xano/SuperForge et met à jour
+        le contact correspondant dans HubSpot via PATCH.
+
+        **Comportement :**
+        - Met à jour le contact HubSpot identifié par `hubspot_id`
+        - Mappings de champs : `type` → `role`, `civility` → `salutation`, `linkedin` → `hs_linkedin_url`
+        - Répond de manière **synchrone** avec le `hubspot_id` mis à jour
+        - Logue l'opération dans la base Retool (table `execution_logs`)
+      operationId: syncContactUpdate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactUpdateRequest'
+            examples:
+              exemple_minimal:
+                summary: Payload minimal
+                value:
+                  hubspot_id: "12345678"
+                  xano_id: 99
+              exemple_complet:
+                summary: Payload complet
+                value:
+                  hubspot_id: "12345678"
+                  xano_id: 99
+                  type: "eleve"
+                  firstname: "Marie"
+                  lastname: "Dupont"
+                  email: "marie.dupont@exemple.fr"
+                  civility: "Mme"
+                  phone: "+33612345678"
+                  job: "CEO"
+                  linkedin: "https://linkedin.com/in/marie-dupont"
+      responses:
+        "200":
+          description: Contact mis à jour avec succès dans HubSpot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactUpdateSuccessResponse'
+              example:
+                success: true
+                hubspot_id: "12345678"
+        "500":
+          description: Erreur lors de la mise à jour dans HubSpot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactUpdateErrorResponse'
+              example:
+                success: false
+                error: "CONTACT_NOT_FOUND"
 
 components:
   schemas:
@@ -157,3 +219,77 @@ components:
           type: string
           description: Message d'erreur retourné par HubSpot
           example: "INVALID_EMAIL_ADDRESS"
+
+    ContactUpdateRequest:
+      type: object
+      required:
+        - hubspot_id
+        - xano_id
+      properties:
+        hubspot_id:
+          type: string
+          description: ID HubSpot du contact à mettre à jour
+          example: "12345678"
+        xano_id:
+          type: integer
+          description: Identifiant du contact dans Xano (utilisé pour les logs)
+          example: 99
+        type:
+          type: string
+          description: |
+            Rôle du contact. Transmis à HubSpot dans le champ `role`.
+          example: "eleve"
+        firstname:
+          type: string
+          description: Prénom du contact
+          example: "Marie"
+        lastname:
+          type: string
+          description: Nom de famille du contact
+          example: "Dupont"
+        email:
+          type: string
+          description: Adresse email du contact
+          example: "marie.dupont@exemple.fr"
+        civility:
+          type: string
+          description: |
+            Civilité. Transmis à HubSpot dans le champ `salutation`.
+          example: "Mme"
+        phone:
+          type: string
+          description: Numéro de téléphone du contact
+          example: "+33612345678"
+        job:
+          type: string
+          description: Intitulé de poste du contact
+          example: "CEO"
+        linkedin:
+          type: string
+          description: |
+            URL du profil LinkedIn. Transmis à HubSpot dans le champ `hs_linkedin_url`.
+          example: "https://linkedin.com/in/marie-dupont"
+
+    ContactUpdateSuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+          example: true
+        hubspot_id:
+          type: string
+          description: ID HubSpot du contact mis à jour
+          example: "12345678"
+
+    ContactUpdateErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+          example: false
+        error:
+          type: string
+          description: Message d'erreur retourné par HubSpot
+          example: "CONTACT_NOT_FOUND"

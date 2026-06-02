@@ -154,19 +154,25 @@ paths:
                 error: "COMPANY_NOT_FOUND"
 
   /webhook/sync-contact-update-from-xano:
-    post:
+    put:
       tags:
         - Contacts
       summary: Mettre à jour un contact dans HubSpot
       description: |
-        Reçoit les données d'un contact depuis Xano/SuperForge et met à jour
+        Reçoit les données complètes d'un contact depuis Xano/SuperForge et met à jour
         le contact correspondant dans HubSpot via PATCH.
 
         **Comportement :**
         - Met à jour le contact HubSpot identifié par `hubspot_id`
-        - Mappings de champs : `type` → `role`, `civility` → `salutation`, `linkedin` → `hs_linkedin_url`
+        - **Seuls les champs fournis (non vides / non null) sont patchés**
+        - Accepte 28 champs EPA couvrant identité, adresses, profil et préférences
         - Répond de manière **synchrone** avec le `hubspot_id` mis à jour
         - Logue l'opération dans la base Retool (table `execution_logs`)
+
+        **Mappings notables :**
+        `type` → `role`, `civility` → `salutation`, `phone` → `mobilephone`,
+        `job` → `jobtitle`, `linkedin` → `hs_linkedin_url`,
+        `work_address` → `address`, `source_epa` → `source_connaissance_epa`
       operationId: syncContactUpdate
       requestBody:
         required: true
@@ -180,19 +186,42 @@ paths:
                 value:
                   hubspot_id: "12345678"
                   xano_id: 99
-              exemple_complet:
-                summary: Payload complet
+              exemple_identite:
+                summary: Mise à jour identité de base
                 value:
                   hubspot_id: "12345678"
                   xano_id: 99
-                  type: "eleve"
+                  type: "accompagnateur"
                   firstname: "Marie"
                   lastname: "Dupont"
                   email: "marie.dupont@exemple.fr"
                   civility: "Mme"
                   phone: "+33612345678"
-                  job: "CEO"
+                  job: "Responsable pédagogique"
                   linkedin: "https://linkedin.com/in/marie-dupont"
+              exemple_complet:
+                summary: Payload EPA complet
+                value:
+                  hubspot_id: "12345678"
+                  xano_id: 99
+                  type: "accompagnateur"
+                  firstname: "Marie"
+                  lastname: "Dupont"
+                  email: "marie.dupont@exemple.fr"
+                  civility: "Mme"
+                  phone: "+33612345678"
+                  job: "Responsable pédagogique"
+                  linkedin: "https://linkedin.com/in/marie-dupont"
+                  work_address: "12 rue des Écoles, 75005 Paris"
+                  home_address: "3 avenue Victor Hugo, 75016 Paris"
+                  fav_address: "work"
+                  source_epa: "bouche_a_oreille"
+                  professionnal_status_id: "salarie"
+                  motivation: "Accompagner les jeunes entrepreneurs"
+                  email_opportunity_frequency: "mensuel"
+                  other_email_granted: true
+                  already_had_epa_program: false
+                  has_unlock_speedmeeting: true
       responses:
         "200":
           description: Contact mis à jour avec succès dans HubSpot
@@ -342,11 +371,12 @@ components:
           type: integer
           description: Identifiant du contact dans Xano (utilisé pour les logs)
           example: 99
+
+        # Identité
         type:
           type: string
-          description: |
-            Rôle du contact. Transmis à HubSpot dans le champ `role`.
-          example: "eleve"
+          description: Rôle du contact. Transmis à HubSpot dans le champ `role`.
+          example: "accompagnateur"
         firstname:
           type: string
           description: Prénom du contact
@@ -361,22 +391,99 @@ components:
           example: "marie.dupont@exemple.fr"
         civility:
           type: string
-          description: |
-            Civilité. Transmis à HubSpot dans le champ `salutation`.
+          description: Civilité. Transmis à HubSpot dans le champ `salutation`.
           example: "Mme"
         phone:
           type: string
-          description: Numéro de téléphone du contact
+          description: Téléphone mobile. Transmis à HubSpot dans le champ `mobilephone`.
           example: "+33612345678"
         job:
           type: string
-          description: Intitulé de poste du contact
-          example: "CEO"
+          description: Intitulé de poste. Transmis à HubSpot dans le champ `jobtitle`.
+          example: "Responsable pédagogique"
         linkedin:
           type: string
-          description: |
-            URL du profil LinkedIn. Transmis à HubSpot dans le champ `hs_linkedin_url`.
+          description: URL du profil LinkedIn. Transmis à HubSpot dans le champ `hs_linkedin_url`.
           example: "https://linkedin.com/in/marie-dupont"
+
+        # Adresses
+        work_address:
+          type: string
+          description: Adresse professionnelle. Transmis à HubSpot dans le champ `address`.
+          example: "12 rue des Écoles, 75005 Paris"
+        home_address:
+          type: string
+          description: Adresse personnelle. Transmis à HubSpot dans `adresse_postale_personnelle`.
+          example: "3 avenue Victor Hugo, 75016 Paris"
+        fav_address:
+          type: string
+          description: Adresse préférée. Transmis à HubSpot dans `adresse_preferee`.
+          example: "work"
+
+        # Profil EPA
+        source_epa:
+          type: string
+          description: Source de connaissance d'EPA. Transmis dans `source_connaissance_epa`.
+          example: "bouche_a_oreille"
+        professionnal_status_id:
+          type: string
+          description: Statut professionnel. Transmis dans `statut_profressionnel`.
+          example: "salarie"
+        companies_id:
+          type: string
+          description: Association liée. Transmis dans le champ `association`.
+          example: "42"
+        networks_id:
+          type: string
+          description: Réseau de rattachement. Transmis dans le champ `reseau`.
+          example: "7"
+        departements_id:
+          type: string
+          description: Département(s). Transmis dans `departement_liste`.
+          example: "75"
+        motivation:
+          type: string
+          description: Motivation / informations libres. Transmis dans `autres_informations_my_epa`.
+          example: "Accompagner les jeunes entrepreneurs"
+        email_opportunity_frequency:
+          type: string
+          description: Fréquence d'email souhaitée. Transmis dans `frequence_email_souhaitee`.
+          example: "mensuel"
+        other_email_granted:
+          type: boolean
+          nullable: true
+          description: Consentement email secondaire. Transmis dans `email_accepte__my_epa`. `null` = non fourni (non patché).
+          example: true
+        teachers_levels_id:
+          type: string
+          description: Voie d'engagement (ex. enseignant). Transmis dans `voie_dengagement`.
+          example: "lycee"
+        domains_id:
+          type: string
+          description: Matière enseignée. Transmis dans `matiere_my_epa`.
+          example: "economie"
+        wanted_epa_programs_id:
+          type: string
+          description: Programme(s) d'intérêt. Transmis dans `programme_interet`.
+          example: "mini_entreprise"
+        already_had_epa_program:
+          type: boolean
+          nullable: true
+          description: A déjà participé à un programme EPA. Transmis dans `participation_anterieur_a_un_programme`. `null` = non fourni (non patché).
+          example: false
+        details_programs:
+          type: string
+          description: Détails de participations antérieures. Transmis dans `details_participation_anterieur`.
+          example: "Mini-Entreprise en 2022"
+        onboarding_tasks:
+          nullable: true
+          description: Tâches d'onboarding. Transmis dans `taches_donboarding`. `null` = non fourni (non patché).
+          example: null
+        has_unlock_speedmeeting:
+          type: boolean
+          nullable: true
+          description: Accès speed-meeting débloqué. Transmis dans `debloquer_speedmeeting`. `null` = non fourni (non patché).
+          example: true
 
     ContactUpdateSuccessResponse:
       type: object

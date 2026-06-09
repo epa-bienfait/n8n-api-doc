@@ -23,6 +23,8 @@ tags:
     description: Synchronisation des entreprises (Mini-Entreprises) de Xano vers HubSpot
   - name: Contacts
     description: Synchronisation des contacts de Xano vers HubSpot
+  - name: Interventions
+    description: Gestion des interventions (objet custom HubSpot `2-144154353`) depuis Xano
 
 paths:
   /webhook/sync-entreprise-create:
@@ -241,6 +243,197 @@ paths:
               example:
                 success: false
                 error: "CONTACT_NOT_FOUND"
+
+  /webhook/sync-xano-create-intervention:
+    post:
+      tags:
+        - Interventions
+      summary: Créer une intervention dans HubSpot
+      description: |
+        Crée un nouvel objet **Intervention** (objet custom `2-144154353`) dans HubSpot,
+        puis crée automatiquement les associations vers l'enseignant et l'établissement.
+
+        **Comportement :**
+        - Mappe `testimonies_status` vers le pipeline stage HubSpot via un mapper interne
+        - Crée l'objet HubSpot et répond **de manière synchrone** avec le `hubspot_id` généré
+        - Crée ensuite (asynchrone) les associations :
+          - `owners_id` → Contact HubSpot (label *Enseignant*, typeId 145)
+          - `establishment_id` → Company HubSpot (association par défaut)
+        - `slots` : jusqu'à 3 créneaux → `creneau_horaire_1/2/3`
+        - `groups` : jusqu'à 5 groupes → propriétés `_a` à `_e`
+        - `operations` : tableau → joints par `;` dans `testimonies_operations`
+      operationId: syncCreateIntervention
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InterventionCreateRequest'
+            examples:
+              exemple_minimal:
+                summary: Payload minimal
+                value:
+                  xano_testimony_id: 123
+                  title: "Témoignage Entrepreneuriat"
+                  testimonies_status: "planned"
+              exemple_complet:
+                summary: Payload complet
+                value:
+                  xano_testimony_id: 123
+                  title: "Témoignage Entrepreneuriat"
+                  testimonies_status: "planned"
+                  testimonies_types: "temoignage"
+                  school_year: "2025-2026"
+                  details_for_volunteer: "Présentation de 30 minutes"
+                  number_of_volunteers_needed: 1
+                  is_waiting_slot: false
+                  waiting_slot_value: ""
+                  address: "12 rue des Écoles, 75005 Paris"
+                  operations: ["sensibilisation", "creation"]
+                  slots:
+                    - start_time: "2026-03-15T10:00:00"
+                  groups:
+                    - name: "Terminale G1"
+                      number_girls: 15
+                      number_boys: 12
+                      groups_levels: "Terminale"
+                      school_systems: "Général"
+                  owners_id: 42
+                  establishment_id: 7
+      responses:
+        "200":
+          description: Intervention créée avec succès dans HubSpot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterventionSuccessResponse'
+              example:
+                response:
+                  status: success
+                  title: Intervention créée
+                  hubspot_id: "98765432"
+        "500":
+          description: Erreur lors de la création dans HubSpot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterventionErrorResponse'
+              example:
+                response:
+                  status: error
+                  title: Erreur création HubSpot
+                  message: "INVALID_INPUT"
+
+  /webhook/sync-xano-update-intervention:
+    post:
+      tags:
+        - Interventions
+      summary: Mettre à jour une intervention dans HubSpot
+      description: |
+        Met à jour un objet **Intervention** existant dans HubSpot via PATCH.
+
+        **Comportement :**
+        - Identifie l'intervention par `hubspot_id`
+        - Mappe `testimonies_status` vers le pipeline stage HubSpot via un mapper interne
+        - `slots` : jusqu'à 3 créneaux → `creneau_horaire_1/2/3`
+        - `groups` : jusqu'à 5 groupes → propriétés `_a` à `_e`
+        - `operations` : tableau → joint par `;` dans `testimonies_operations`
+        - Répond **de manière synchrone** avec le `hubspot_id` mis à jour
+      operationId: syncUpdateIntervention
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InterventionUpdateRequest'
+            examples:
+              exemple_minimal:
+                summary: Payload minimal
+                value:
+                  hubspot_id: "98765432"
+                  xano_testimony_id: 123
+                  title: "Témoignage Entrepreneuriat MAJ"
+                  testimonies_status: "confirmed"
+              exemple_complet:
+                summary: Payload complet
+                value:
+                  hubspot_id: "98765432"
+                  xano_testimony_id: 123
+                  title: "Témoignage Entrepreneuriat MAJ"
+                  testimonies_status: "confirmed"
+                  testimonies_types: "temoignage"
+                  school_year: "2025-2026"
+                  details_for_volunteer: "Présentation de 45 minutes"
+                  number_of_volunteers_needed: 2
+                  is_waiting_slot: false
+                  address: "12 rue des Écoles, 75005 Paris"
+                  operations: ["sensibilisation"]
+                  slots:
+                    - start_time: "2026-03-15T10:00:00"
+                    - start_time: "2026-03-15T14:00:00"
+                  groups:
+                    - name: "Terminale G1"
+                      number_girls: 15
+                      number_boys: 12
+                      groups_levels: "Terminale"
+                      school_systems: "Général"
+      responses:
+        "200":
+          description: Intervention mise à jour avec succès dans HubSpot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterventionSuccessResponse'
+              example:
+                response:
+                  status: success
+                  title: Intervention mise à jour
+                  hubspot_id: "98765432"
+        "500":
+          description: Erreur lors de la mise à jour dans HubSpot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterventionErrorResponse'
+              example:
+                response:
+                  status: error
+                  title: Erreur MAJ HubSpot
+                  message: "OBJECT_NOT_FOUND"
+
+  /webhook/sync-xano-create-associations:
+    post:
+      tags:
+        - Interventions
+      summary: Créer les associations participants d'une intervention
+      description: |
+        Crée les associations **Témoin confirmé** entre une intervention et une liste
+        de contacts participants.
+
+        **Comportement :**
+        - Résout le `hubspot_id` de l'intervention depuis `testimonies_id` via Xano
+        - Pour chaque `contact_xano_id` dans `contacts_list` :
+          - Résout le `hubspot_id` du contact via son `id_xano` HubSpot
+          - Crée l'association intervention ↔ contact (typeId 126, label *Témoin confirmé*)
+        - Répond **immédiatement** (fire & forget) — le traitement continue en arrière-plan
+        - Logue chaque association dans la base Retool
+      operationId: syncCreateAssociations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InterventionAssociationsRequest'
+            example:
+              testimonies_id: 123
+              contacts_list: [42, 99, 156]
+      responses:
+        "200":
+          description: Traitement démarré (réponse immédiate, traitement asynchrone)
+          content:
+            application/json:
+              example:
+                message: Workflow got started.
 
 components:
   schemas:
@@ -484,6 +677,187 @@ components:
           nullable: true
           description: Accès speed-meeting débloqué. Transmis dans `debloquer_speedmeeting`. `null` = non fourni (non patché).
           example: true
+
+    InterventionSlot:
+      type: object
+      properties:
+        start_time:
+          type: string
+          description: Date et heure de début du créneau (ISO 8601)
+          example: "2026-03-15T10:00:00"
+
+    InterventionGroup:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Nom du groupe
+          example: "Terminale G1"
+        number_girls:
+          type: integer
+          description: Nombre de filles dans le groupe
+          example: 15
+        number_boys:
+          type: integer
+          description: Nombre de garçons dans le groupe
+          example: 12
+        groups_levels:
+          type: string
+          description: Niveau scolaire du groupe
+          example: "Terminale"
+        school_systems:
+          type: string
+          description: Dispositif / filière scolaire
+          example: "Général"
+
+    InterventionPayload:
+      type: object
+      description: Champs communs à la création et la mise à jour d'une intervention
+      properties:
+        title:
+          type: string
+          description: Titre de l'intervention. Transmis dans le champ `nom`.
+          example: "Témoignage Entrepreneuriat"
+        testimonies_status:
+          type: string
+          description: Statut Xano de l'intervention. Mappé vers `hs_pipeline_stage` HubSpot.
+          example: "planned"
+        testimonies_types:
+          type: string
+          description: Type d'intervention. Transmis dans `type_dintervention`.
+          example: "temoignage"
+        school_year:
+          type: string
+          description: Année scolaire. Transmis dans `periode_scolaire`.
+          example: "2025-2026"
+        details_for_volunteer:
+          type: string
+          description: Note publique pour le bénévole. Transmis dans `note_publique`.
+          example: "Présentation de 30 minutes"
+        number_of_volunteers_needed:
+          type: integer
+          description: Nombre d'entrepreneurs souhaités. Transmis dans `nombre_entrepreneurs`.
+          example: 1
+        is_waiting_slot:
+          type: boolean
+          description: Indique si l'intervention est sur liste d'attente.
+          example: false
+        waiting_slot_value:
+          type: string
+          description: Période d'attente souhaitée. Transmis dans `periode_intervention`.
+          example: "mars 2026"
+        address:
+          type: string
+          description: Adresse du lieu d'intervention.
+          example: "12 rue des Écoles, 75005 Paris"
+        operations:
+          type: array
+          items:
+            type: string
+          description: Liste des opérations. Jointées par `;` dans `testimonies_operations`.
+          example: ["sensibilisation", "creation"]
+        slots:
+          type: array
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/InterventionSlot'
+          description: Créneaux horaires (max 3). Transmis dans `creneau_horaire_1/2/3`.
+        groups:
+          type: array
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/InterventionGroup'
+          description: Groupes d'élèves (max 5). Transmis dans les propriétés `_a` à `_e`.
+
+    InterventionCreateRequest:
+      allOf:
+        - $ref: '#/components/schemas/InterventionPayload'
+        - type: object
+          required:
+            - xano_testimony_id
+          properties:
+            xano_testimony_id:
+              type: integer
+              description: Identifiant Xano de l'intervention (utilisé pour les logs et comme `xano_id` HubSpot)
+              example: 123
+            owners_id:
+              type: integer
+              description: Xano ID de l'enseignant responsable. Association *Enseignant* (typeId 145) créée après la création.
+              example: 42
+            establishment_id:
+              type: integer
+              description: Xano ID de l'établissement. Association Company (défaut) créée après la création.
+              example: 7
+
+    InterventionUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/InterventionPayload'
+        - type: object
+          required:
+            - hubspot_id
+            - xano_testimony_id
+          properties:
+            hubspot_id:
+              type: string
+              description: ID HubSpot de l'intervention à mettre à jour
+              example: "98765432"
+            xano_testimony_id:
+              type: integer
+              description: Identifiant Xano de l'intervention (utilisé pour les logs)
+              example: 123
+
+    InterventionAssociationsRequest:
+      type: object
+      required:
+        - testimonies_id
+        - contacts_list
+      properties:
+        testimonies_id:
+          type: integer
+          description: Xano ID de l'intervention. Utilisé pour résoudre le `hubspot_id` via Xano.
+          example: 123
+        contacts_list:
+          type: array
+          items:
+            type: integer
+          description: Liste des Xano IDs des contacts participants à associer (label *Témoin confirmé*, typeId 126).
+          example: [42, 99, 156]
+
+    InterventionSuccessResponse:
+      type: object
+      properties:
+        response:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [success]
+              example: success
+            title:
+              type: string
+              example: "Intervention créée"
+            hubspot_id:
+              type: string
+              description: ID HubSpot de l'intervention créée ou mise à jour
+              example: "98765432"
+
+    InterventionErrorResponse:
+      type: object
+      properties:
+        response:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [error]
+              example: error
+            title:
+              type: string
+              example: "Erreur création HubSpot"
+            message:
+              type: string
+              description: Message d'erreur retourné par HubSpot
+              example: "INVALID_INPUT"
 
     ContactUpdateSuccessResponse:
       type: object

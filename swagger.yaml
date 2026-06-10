@@ -435,6 +435,63 @@ paths:
               example:
                 message: Workflow got started.
 
+  /webhook/sync-xano-testimony-visibility:
+    post:
+      tags:
+        - Interventions
+      summary: Mettre à jour la visibilité MyEPA d'une intervention
+      description: |
+        Active ou désactive la visibilité d'une intervention sur la plateforme MyEPA.
+
+        **Comportement :**
+        - Résout le `hubspot_id` de l'intervention depuis `testimonies_id` via Xano
+        - Convertit le booléen `visible` en valeur HubSpot : `true` → `"Visible"`, sinon `"Non visible"`
+        - PATCH la propriété `visible_my_epa` sur l'objet intervention (`2-144154353`)
+        - Répond **de manière synchrone** avec le `hubspot_id` et la valeur appliquée
+        - Logue l'opération dans la base Retool
+      operationId: syncTestimonyVisibility
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InterventionVisibilityRequest'
+            examples:
+              rendre_visible:
+                summary: Rendre l'intervention visible
+                value:
+                  testimonies_id: 123
+                  visible: true
+              masquer:
+                summary: Masquer l'intervention
+                value:
+                  testimonies_id: 123
+                  visible: false
+      responses:
+        "200":
+          description: Visibilité mise à jour avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterventionVisibilitySuccessResponse'
+              example:
+                response:
+                  status: success
+                  title: Visibilité mise à jour
+                  hubspot_id: "98765432"
+                  visible_my_epa: "Visible"
+        "500":
+          description: Erreur lors de la mise à jour de la visibilité
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterventionErrorResponse'
+              example:
+                response:
+                  status: error
+                  title: Erreur MAJ visibilité
+                  message: "OBJECT_NOT_FOUND"
+
 components:
   schemas:
     EntrepriseCreateRequest:
@@ -823,6 +880,22 @@ components:
           description: Liste des Xano IDs des contacts participants à associer (label *Témoin confirmé*, typeId 126).
           example: [42, 99, 156]
 
+    InterventionVisibilityRequest:
+      type: object
+      required:
+        - testimonies_id
+        - visible
+      properties:
+        testimonies_id:
+          type: integer
+          description: Xano ID de l'intervention. Utilisé pour résoudre le `hubspot_id` via Xano.
+          example: 123
+        visible:
+          type: boolean
+          description: |
+            Visibilité sur MyEPA. `true` → `visible_my_epa = "Visible"`, sinon `"Non visible"`.
+          example: true
+
     InterventionSuccessResponse:
       type: object
       properties:
@@ -840,6 +913,29 @@ components:
               type: string
               description: ID HubSpot de l'intervention créée ou mise à jour
               example: "98765432"
+
+    InterventionVisibilitySuccessResponse:
+      type: object
+      properties:
+        response:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [success]
+              example: success
+            title:
+              type: string
+              example: "Visibilité mise à jour"
+            hubspot_id:
+              type: string
+              description: ID HubSpot de l'intervention
+              example: "98765432"
+            visible_my_epa:
+              type: string
+              enum: [Visible, Non visible]
+              description: Valeur de visibilité appliquée dans HubSpot
+              example: "Visible"
 
     InterventionErrorResponse:
       type: object

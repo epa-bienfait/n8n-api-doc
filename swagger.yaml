@@ -25,6 +25,8 @@ tags:
     description: Synchronisation des contacts de Xano vers HubSpot
   - name: Interventions
     description: Gestion des interventions (objet custom HubSpot `2-144154353`) depuis Xano
+  - name: Associations
+    description: Création et suppression d'associations entre objets HubSpot depuis Xano
 
 paths:
   /webhook/sync-entreprise-create:
@@ -491,6 +493,182 @@ paths:
                   status: error
                   title: Erreur MAJ visibilité
                   message: "OBJECT_NOT_FOUND"
+
+  /webhook/create-contact:
+    post:
+      tags:
+        - Contacts
+      summary: Créer un contact dans HubSpot
+      description: |
+        Crée un contact dans HubSpot depuis Xano/SuperForge (POST `/crm/v3/objects/contacts`).
+
+        **Comportement :**
+        - Crée le contact et répond **de manière synchrone** avec le `hubspot_id`
+        - Force `input_contact = "MyEPA"` sur tout contact créé
+        - Le champ `xano_id` est utilisé pour la détection de doublon et stocké dans `id_xano`
+        - **Seuls les champs fournis (non vides / non null) sont envoyés**
+
+        **Mappings notables :**
+        `active_role` (`Volunteer`→Bénévole, `Teacher`→6) → `role`, `civility` → `salutation`,
+        `phone` → `mobilephone`, `job` → `jobtitle`, `linkedin` → `hs_linkedin_url`,
+        `work_address` → `address`, `source_epa` → `source_connaissance_epa`
+      operationId: createContact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactCreateRequest'
+            examples:
+              exemple_minimal:
+                summary: Payload minimal
+                value:
+                  xano_id: 99
+                  firstname: "Marie"
+                  lastname: "Dupont"
+                  email: "marie.dupont@exemple.fr"
+              exemple_complet:
+                summary: Payload EPA complet
+                value:
+                  xano_id: 99
+                  active_role: "Volunteer"
+                  firstname: "Marie"
+                  lastname: "Dupont"
+                  email: "marie.dupont@exemple.fr"
+                  civility: "Mme"
+                  phone: "+33612345678"
+                  job: "Responsable pédagogique"
+                  linkedin: "https://linkedin.com/in/marie-dupont"
+                  work_address: "12 rue des Écoles, 75005 Paris"
+                  source_epa: "bouche_a_oreille"
+                  professionnal_status_id: "salarie"
+                  other_email_granted: true
+                  already_had_epa_program: false
+      responses:
+        "200":
+          description: Contact créé avec succès dans HubSpot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactUpdateSuccessResponse'
+              example:
+                success: true
+                hubspot_id: "12345678"
+        "500":
+          description: Erreur lors de la création dans HubSpot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactUpdateErrorResponse'
+              example:
+                success: false
+                error: "INVALID_EMAIL_ADDRESS"
+
+  /webhook/sync-association-contact-company:
+    post:
+      tags:
+        - Associations
+      summary: Associer un contact à une entreprise
+      description: |
+        Crée l'association entre un contact et une company dans HubSpot (idempotent).
+
+        **Comportement :**
+        - Résout les `hubspot_id` du contact et de la company via leurs `id_xano`
+        - Vérifie si l'association existe déjà ; si non, la crée (`PUT /crm/v4/.../associations/default/companies/...`)
+        - **Réponse immédiate** (fire & forget) — pas de corps de réponse spécifique, traitement et logs en arrière-plan
+      operationId: syncAssociationContactCompany
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactCompanyAssociationRequest'
+            example:
+              contact_xano_id: "99"
+              company_xano_id: "42"
+      responses:
+        "200":
+          description: Traitement démarré (réponse immédiate, traitement asynchrone)
+
+  /webhook/delete-contact-association:
+    delete:
+      tags:
+        - Associations
+      summary: Désassocier un contact d'une entreprise
+      description: |
+        Supprime l'association entre un contact et une company dans HubSpot.
+
+        **Comportement :**
+        - Résout les `hubspot_id` du contact et de la company via leurs `id_xano`
+        - Si l'association existe, la supprime (`DELETE /crm/v4/.../associations/companies/...`)
+        - **Réponse immédiate** (fire & forget) — traitement et logs en arrière-plan
+      operationId: deleteContactAssociation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactCompanyAssociationRequest'
+            example:
+              contact_xano_id: "99"
+              company_xano_id: "42"
+      responses:
+        "200":
+          description: Traitement démarré (réponse immédiate, traitement asynchrone)
+
+  /webhook/sync-association-mentor-minientreprise:
+    post:
+      tags:
+        - Associations
+      summary: Associer un mentor à une mini-entreprise
+      description: |
+        Crée l'association entre un contact (mentor) et une mini-entreprise
+        (objet custom HubSpot `2-113459405`).
+
+        **Comportement :**
+        - Résout les `hubspot_id` du contact et de la mini-entreprise via leurs `id_xano`
+        - Si l'association n'existe pas, la crée (`PUT /crm/v4/objects/2-113459405/.../associations/contacts/...`, typeId 129)
+        - **Réponse immédiate** (fire & forget) — traitement et logs en arrière-plan
+      operationId: syncAssociationMentorMiniEntreprise
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MentorMiniEntrepriseAssociationRequest'
+            example:
+              contact_xano_id: "99"
+              mini_entreprise_xano_id: "150"
+      responses:
+        "200":
+          description: Traitement démarré (réponse immédiate, traitement asynchrone)
+
+  /webhook/sync-desassociation-mentor-minientreprise:
+    post:
+      tags:
+        - Associations
+      summary: Désassocier un mentor d'une mini-entreprise
+      description: |
+        Supprime l'association entre un contact (mentor) et une mini-entreprise
+        (objet custom HubSpot `2-113459405`).
+
+        **Comportement :**
+        - Résout les `hubspot_id` du contact et de la mini-entreprise via leurs `id_xano`
+        - Si l'association existe, la supprime (`DELETE /crm/v4/objects/2-113459405/.../associations/contacts/...`)
+        - **Réponse immédiate** (fire & forget) — traitement et logs en arrière-plan
+      operationId: syncDesassociationMentorMiniEntreprise
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MentorMiniEntrepriseAssociationRequest'
+            example:
+              contact_xano_id: "99"
+              mini_entreprise_xano_id: "150"
+      responses:
+        "200":
+          description: Traitement démarré (réponse immédiate, traitement asynchrone)
 
 components:
   schemas:
@@ -978,3 +1156,156 @@ components:
           type: string
           description: Message d'erreur retourné par HubSpot
           example: "CONTACT_NOT_FOUND"
+
+    ContactCreateRequest:
+      type: object
+      required:
+        - xano_id
+      properties:
+        xano_id:
+          type: integer
+          description: Identifiant du contact dans Xano. Sert à la détection de doublon et stocké dans `id_xano`.
+          example: 99
+        active_role:
+          type: string
+          enum: [Volunteer, Teacher]
+          description: |
+            Rôle du contact. Mappé vers `role` HubSpot : `Volunteer` → *Bénévole*, `Teacher` → `6`.
+          example: "Volunteer"
+        firstname:
+          type: string
+          description: Prénom du contact
+          example: "Marie"
+        lastname:
+          type: string
+          description: Nom de famille du contact
+          example: "Dupont"
+        email:
+          type: string
+          description: Adresse email du contact
+          example: "marie.dupont@exemple.fr"
+        civility:
+          type: string
+          description: Civilité. Transmis dans `salutation`.
+          example: "Mme"
+        phone:
+          type: string
+          description: Téléphone mobile. Transmis dans `mobilephone`.
+          example: "+33612345678"
+        job:
+          type: string
+          description: Intitulé de poste. Transmis dans `jobtitle`.
+          example: "Responsable pédagogique"
+        linkedin:
+          type: string
+          description: URL LinkedIn. Transmis dans `hs_linkedin_url`.
+          example: "https://linkedin.com/in/marie-dupont"
+        work_address:
+          type: string
+          description: Adresse professionnelle. Transmis dans `address`.
+          example: "12 rue des Écoles, 75005 Paris"
+        home_address:
+          type: string
+          description: Adresse personnelle. Transmis dans `adresse_postale_personnelle`.
+          example: "3 avenue Victor Hugo, 75016 Paris"
+        fav_address:
+          type: string
+          description: Adresse préférée. Transmis dans `adresse_preferee`.
+          example: "work"
+        source_epa:
+          type: string
+          description: Source de connaissance d'EPA. Transmis dans `source_connaissance_epa`.
+          example: "bouche_a_oreille"
+        professionnal_status_id:
+          type: string
+          description: Statut professionnel. Transmis dans `statut_profressionnel`.
+          example: "salarie"
+        companies_id:
+          type: string
+          description: Association liée. Transmis dans `association`.
+          example: "42"
+        networks_id:
+          type: string
+          description: Réseau de rattachement. Transmis dans `reseau`.
+          example: "7"
+        departements_id:
+          type: string
+          description: Département(s). Transmis dans `departement_liste`.
+          example: "75"
+        motivation:
+          type: string
+          description: Motivation / informations libres. Transmis dans `autres_informations_my_epa`.
+          example: "Accompagner les jeunes entrepreneurs"
+        email_opportunity_frequency:
+          type: string
+          description: Fréquence d'email souhaitée. Transmis dans `frequence_email_souhaitee`.
+          example: "mensuel"
+        other_email_granted:
+          type: boolean
+          nullable: true
+          description: Consentement email secondaire. Transmis dans `email_accepte__my_epa`. `null` = non fourni.
+          example: true
+        teachers_levels_id:
+          type: string
+          description: Voie d'engagement. Transmis dans `voie_dengagement`.
+          example: "lycee"
+        domains_id:
+          type: string
+          description: Matière enseignée. Transmis dans `matiere_my_epa`.
+          example: "economie"
+        wanted_epa_programs_id:
+          type: string
+          description: Programme(s) d'intérêt. Transmis dans `programme_interet`.
+          example: "mini_entreprise"
+        already_had_epa_program:
+          type: boolean
+          nullable: true
+          description: A déjà participé à un programme EPA. Transmis dans `participation_anterieur_a_un_programme`. `null` = non fourni.
+          example: false
+        details_programs:
+          type: string
+          description: Détails de participations antérieures. Transmis dans `details_participation_anterieur`.
+          example: "Mini-Entreprise en 2022"
+        onboarding_tasks:
+          nullable: true
+          description: Tâches d'onboarding. Transmis dans `taches_donboarding`. `null` = non fourni.
+          example: null
+        has_unlock_speedmeeting:
+          type: boolean
+          nullable: true
+          description: Accès speed-meeting débloqué. Transmis dans `debloquer_speedmeeting`. `null` = non fourni.
+          example: true
+
+    ContactCompanyAssociationRequest:
+      type: object
+      required:
+        - contact_xano_id
+        - company_xano_id
+      properties:
+        contact_xano_id:
+          type: string
+          description: Xano ID du contact. Résolu en `hubspot_id` via la propriété `id_xano`.
+          example: "99"
+        company_xano_id:
+          type: string
+          description: Xano ID de la company. Résolu en `hubspot_id` via la propriété `id_xano`.
+          example: "42"
+
+    MentorMiniEntrepriseAssociationRequest:
+      type: object
+      required:
+        - contact_xano_id
+        - mini_entreprise_xano_id
+      properties:
+        contact_xano_id:
+          type: string
+          description: |
+            Xano ID du contact (mentor). Résolu en `hubspot_id` via `id_xano`.
+            Alias accepté : `contacts_id`.
+          example: "99"
+        mini_entreprise_xano_id:
+          type: string
+          description: |
+            Xano ID de la mini-entreprise (objet custom `2-113459405`). Résolu via `id_xano`.
+            Alias acceptés : `mini_entreprises_id`, `minientreprise_xano_id`.
+          example: "150"
